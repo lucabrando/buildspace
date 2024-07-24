@@ -1,11 +1,5 @@
 {
     "version": 2,
-    "functions": {
-        "api/*.py": {
-            "excludeFiles": "{**/.venv,**/.env,**/*.pyc}",
-            "runtime": "python3.9"
-        }
-    },
     "builds": [
         {
             "src": "app.py",
