@@ -44,5 +44,3 @@ def index():
         summary = "\n\n".join(all_texts)
     
     return render_template('index.html', summary=summary)
-
-# No need for the if __name__ == "__main__" block for Vercel deployment
