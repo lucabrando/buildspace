@@ -1,15 +1,58 @@
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
 import os
+from google.cloud import storage
+from google.oauth2 import service_account
+from dotenv import load_dotenv
+import vertexai
+from vertexai.generative_models import GenerativeModel, Part
 import time
-from pathlib import Path
+from google.api_core import retry
+from google.api_core import exceptions as google_exceptions
 
-# Load the API key from the environment variable
-GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GOOGLE_API_KEY)
+# Load environment variables
+load_dotenv('.env.development.local')
 
-# Directory containing the content
-content_directory = Path("/Users/lucabrandosanfilippo/GitHub Folder/buildspace/content_from_user")
+# Project and bucket setup
+project_id = "profound-vista-384310"
+GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")  # This should be "ig2newsletter"
+GCS_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+# Initialize Vertex AI
+vertexai.init(project=project_id, location="us-central1")
+
+# Initialize the model
+model = GenerativeModel("gemini-1.5-pro-001")
+
+def get_gcs_client():
+    credentials = service_account.Credentials.from_service_account_file(
+        GCS_CREDENTIALS_PATH, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    return storage.Client(credentials=credentials)
+
+@retry.Retry(predicate=retry.if_exception_type(google_exceptions.ServiceUnavailable))
+def process_content_with_retry(blob_name: str, prompt: str):
+    file_uri = f"gs://{GCS_BUCKET_NAME}/{blob_name}"
+    mime_type = "video/mp4" if blob_name.endswith('.mp4') else "image/jpeg"
+    
+    file_part = Part.from_uri(file_uri, mime_type=mime_type)
+    contents = [file_part, prompt]
+
+    response = model.generate_content(contents)
+    return response.text
+
+def process_instagram_data(prompt: str):
+    storage_client = get_gcs_client()
+    bucket = storage_client.bucket(GCS_BUCKET_NAME)
+    
+    all_texts = []
+    for blob in bucket.list_blobs(prefix="instagram_content/"):
+        try:
+            text = process_content_with_retry(blob.name, prompt)
+            all_texts.append(text)
+        except Exception as e:
+            print(f"Error processing {blob.name}: {str(e)}")
+        time.sleep(1)  # Add a small delay between requests
+    
+    return "\n\n".join(all_texts)
 
 # Prompts for video and image processing
 universal_prompt = """
@@ -53,73 +96,10 @@ Another week gone by, here's a quick recap of what I've been up to:
 [Concluding remarks, call to action, or teaser]
 """
 
-# Initialize the model
-model = genai.GenerativeModel(model_name="models/gemini-1.5-pro")
-
-def process_file(file_path, prompt):
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            # Upload the file
-            print(f"Uploading file {file_path}...")
-            sample_file = genai.upload_file(path=str(file_path), display_name=file_path.name)
-            print(f"Completed upload: {sample_file.uri}")
-
-            # Wait for the file to be processed if it's a video
-            if file_path.suffix.lower() in ['.mp4', '.mov', '.avi']:
-                while sample_file.state.name == "PROCESSING":
-                    print('.', end='')
-                    time.sleep(10)
-                    sample_file = genai.get_file(sample_file.name)
-
-                if sample_file.state.name == "FAILED":
-                    raise ValueError(sample_file.state.name)
-
-            # Generate content using the uploaded file and the prompt
-            print("Making LLM inference request...")
-            response = model.generate_content(
-                [sample_file, prompt],
-                generation_config={
-                    "temperature": 0.3,
-                    "top_p": 1,
-                    "top_k": 32,
-                    "max_output_tokens": 4096,
-                },
-                safety_settings={
-                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-                },
-                request_options={"timeout": 600}
-            )
-            return response.text
-        except Exception as e:
-            if "500" in str(e) and attempt < max_retries - 1:
-                print(f"Error processing file {file_path.name}: {str(e)}. Retrying ({attempt + 1}/{max_retries})...")
-                time.sleep(5)  # Wait before retrying
-            else:
-                return f"Error processing file {file_path.name}: {str(e)}"
-
-def main():
-    if not content_directory.exists():
-        print(f"The folder {content_directory} does not exist.")
-        return
-
-    all_texts = []
-
-    for file in content_directory.iterdir():
-        if file.suffix.lower() in ['.mp4', '.mov', '.avi']:
-            print(f"Processing video: {file.name}")
-            text = process_file(file, universal_prompt)
-            all_texts.append(text)
-        elif file.suffix.lower() in ['.jpg', '.jpeg', '.png']:
-            print(f"Processing image: {file.name}")
-            text = process_file(file, universal_prompt)
-            all_texts.append(text)
-
-    combined_text = "\n".join(all_texts)
-    return combined_text
-
 if __name__ == "__main__":
-    print(main())
+    result = process_instagram_data(universal_prompt)
+    print(result)
+    
+    # Optionally, save the result to a file
+    with open("weekly_digest.txt", "w") as f:
+        f.write(result)

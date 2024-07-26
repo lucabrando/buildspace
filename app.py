@@ -1,46 +1,36 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, flash
 from scrape_ig import run_instagram_scraper, save_scraped_data
-from download_content import create_directory, clear_directory, download_content
-from semantic_extraction import process_file, universal_prompt
-from pathlib import Path
-import json
+from download_content import process_instagram_data as download_process
+from semantic_extraction import process_instagram_data as semantic_process, universal_prompt
 import os
+from dotenv import load_dotenv
+
+load_dotenv('.env.development.local')
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     summary = None
     if request.method == 'POST':
-        instagram_url = request.form['instagram_url']
-        username = instagram_url.rstrip('/').split('/')[-1]  # Extract username from URL
-        
-        # Run the Instagram scraper with the new username
-        run = run_instagram_scraper(username)
-        
-        # Save scraped data
-        save_scraped_data(run)
-        
-        # Download content
-        content_directory = 'content_from_user'
-        create_directory(content_directory)
-        clear_directory(content_directory)  # Clear the directory before downloading new content
-        with open('instagram_data.json', 'r') as file:
-            data = json.load(file)
-        for item in data:
-            if item.get("videoUrl"):
-                download_content(item["videoUrl"], content_directory, is_video=True)
-            elif item.get("displayUrl"):
-                download_content(item["displayUrl"], content_directory, is_video=False)
-        
-        # Process content and generate summary
-        all_texts = []
-        content_path = Path(content_directory)
-        for file in content_path.iterdir():
-            if file.suffix.lower() in ['.mp4', '.mov', '.avi', '.jpg', '.jpeg', '.png']:
-                text = process_file(file, universal_prompt)
-                all_texts.append(text)
-        
-        summary = "\n\n".join(all_texts)
+        username = request.form['instagram_username']
+        try:
+            # Run the Instagram scraper with the username
+            run = run_instagram_scraper(username)
+            
+            # Save scraped data
+            save_scraped_data(run)
+            
+            # Download and store content
+            download_process(username)  # Assuming you update this function to accept username
+            
+            # Process content and generate summary
+            summary = semantic_process(universal_prompt)  # Removed username parameter
+        except Exception as e:
+            flash(f"An error occurred: {str(e)}")
     
     return render_template('index.html', summary=summary)
+
+if __name__ == "__main__":
+    app.run(debug=True)

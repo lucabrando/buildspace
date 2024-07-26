@@ -5,29 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Instagram Content Summarizer</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        h1 { text-align: center; }
-        form { display: flex; flex-direction: column; align-items: center; }
-        input[type="text"] { width: 100%; padding: 10px; margin: 10px 0; }
-        input[type="submit"] { padding: 10px 20px; background-color: #0095f6; color: white; border: none; cursor: pointer; }
-        #summary { margin-top: 20px; }
-        #summary h2 { margin-bottom: 10px; }
-        #summary p { line-height: 1.6; margin-bottom: 10px; }
-        #summary ul { margin-bottom: 10px; }
-        #summary li { margin-bottom: 5px; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            width: 300px;
+            padding: 5px;
+        }
+        input[type="submit"] {
+            padding: 5px 10px;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
-    <h1>Get a Newsletter Digest from Your IG Weekly Content</h1>
+    <h1>Instagram Content Summarizer</h1>
     <form method="POST">
-        <input type="text" name="instagram_url" placeholder="Copy paste your profile link!" required>
-        <input type="submit" value="Create my newsletter">
+        <label for="instagram_username">Instagram Username:</label>
+        <input type="text" id="instagram_username" name="instagram_username" required>
+        <input type="submit" value="Generate Summary">
     </form>
     {% if summary %}
-        <div id="summary">
-            <h2>Summary:</h2>
-            <p>{{ summary|safe }}</p>
-        </div>
+        <h2>Generated Summary:</h2>
+        <pre>{{ summary }}</pre>
     {% endif %}
 </body>
 </html>

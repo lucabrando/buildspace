@@ -6,3 +6,14 @@ python-dotenv==1.0.1
 pyzmq==26.0.3
 referencing==0.35.1
 requests==2.32.3
+psycopg2==2.9.6
+requests
+psycopg2-binary
+python-dotenv
+flask
+psycopg2-binary
+python-dotenv
+instaloader
+google-cloud-storage
+google-auth
+google-generativeai
